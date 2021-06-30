@@ -1,0 +1,184 @@
+---
+title: "Final Project"
+author: "Yueze Xu, Jin Jing, Maolin Hang"
+date: "4/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Goals
+
+The goal of this project is to allow you to practice your analysis, theoretical, and computational skills on a new question. We will be using data from the Reproducibility Project: Psychology, which was an attempt to replicate experiments in Psychology. You can work in groups of up to three people for this project. 
+
+1) Read about the project at https://osf.io/447b3/ (the first 28 pages). 
+2) Pick a study to examine: https://osf.io/ezcuj/wiki/Replicated%20Studies/ 
+  - You can consider examining this file: https://osf.io/fgjvw/, which has all of the datasets listed out with the titles and the descriptors to help sort through a topic you might find interesting. Also, not all datasets are good datasets! 
+3) Read the paper for the replication, specifically focusing on the "target of the study" listed on the replication page. If you have trouble finding the article full-text, please contact me. Try using Google Scholar on the original citation listed in the wiki. 
+4) Go to the project page and download the data from the project. Make sure it's raw data that you can import into R.  
+5) Generate a hypothesis about the data using one of the analyses we've discussed (correlation, regression, t-tests, ANOVA).
+6) Use the data screening we've discussed on the data you are using for the hypothesis (i.e., not the whole dataset).
+7) Run the analysis that will answer your hypothesis test.
+8) Fill in the following report based on your results. 
+
+## Citation of the Study
+B Dessalegn, B Landau \
+OSF project: https://osf.io/iajp5/ \
+Final report: https://osf.io/83n4z/ \
+R script to reproduce key finding: https://osf.io/qmupg/ \
+DOI: 10.17605/OSF.IO/4KR6E
+
+## Summary of the Study
+
+The original study conducted by Dessalegn and Landau (2008) tried to find out whether language (relational and directional) can help conjunct visual features. In four studies, a sample of four-year-old children were shown a shape split symmetrically into green and red, either vertically, horizontally or diagonally. When instructed with either relational or direcional language describing the color position, children are expected to identify the target in the set. \
+
+The replication study focused on the fourth one of the original paper, and tried to arrive at the same findings that directional information in language contributes to the feature binding of color and location information. To replicate, the new study gathered fourty-nine English-speaking 4-year-olds, and performed the trials. In the replicate study, Fitneva used a t-test for the condition effects, rather than the 2x3 ANOVA method used by the original paper. The effect had the same direction as the original one, but it failed to replicate the size and significance. \
+
+## Project Hypothesis
+
+### Ho: The condition (directional/relational) has no influence on the accuracy
+### Ha: The condition (directional/relational) has some influence on the accuracy
+
+## Part 1: The Data
+
+**We decide to use the whole raw data set from the original project.**\
+**We've also uploaded the raw file "DATA Binding.xlsx" along with this submission.**
+
+```{r}
+library("xlsx")
+library("dplyr")
+library("lsr")
+my_data<- read.xlsx(file ="DATA Binding.xlsx", 2, header=TRUE)
+head(my_data)
+```
+
+## Part 2: Data Screening
+
+## Accuracy:
+**For categorical variables, we applied factor function to "gender" and "condition".**
+
+```{r accuracy}
+summary(my_data)
+notypos <- my_data
+str(notypos)
+##Factor the character vaiables
+notypos$gender <- factor(notypos$gender,
+                  levels = c("m", "f"),
+                  labels = c("Male", "Female"))    
+notypos$Condition <- factor(notypos$Condition,
+                  levels = c("dir", "rel"),
+                  labels = c("Directional", "Relational"))  
+
+summary(notypos)
+```
+## Checking Missing data:
+
+**We use the 5% rule to exclude rows that have missing data.**\
+**And the result shows we do not have missing data.**
+```{r missing}
+percentmiss <- function(x) { sum(is.na(x))/length(x) * 100}
+#checking the missing value for each row
+missing <- apply(notypos, 1, percentmiss)
+table(missing)
+```
+## Outliers:
+**We removed rows from raw data where participant are marked as "excluded" due to failing the practice and attention problems( Exclude..1..yes = 1)**\
+**Also, we only included the data for trails between 9 to 32, which are the experimental trials.** 
+
+```{r outliers}
+##remove rows when excluded..1..yes == 1,which participant excluded due to failing practice and attention problems
+mydata<-notypos[!notypos$Exclude..1...yes==1,]
+##only keep trail number from 9-32 which is named as experimental
+mydata<-mydata[notypos$Trial>8,]
+summary(mydata)
+str(mydata)
+```
+# Assumptions:
+
+## Linearity: 
+
+**The dots within the (-2, 2) range are along the linear line. Linearity assumption met.**\
+
+```{r Linearity}
+random <- rchisq(nrow(mydata), 6) #lucky number 6
+fake <- lm(random ~ ., data = mydata)  
+standardized <- rstudent(fake)
+fittedvalues <- scale(fake$fitted.values)
+
+{qqnorm(standardized)
+  abline(0,1)
+  abline(v = -2)
+  abline(v = 2)}
+```
+
+## Normality:
+**According to the histogram, the distribution looks close to normal. Normality assumption met.**
+
+```{r normality}
+hist(standardized, breaks = 15)
+```
+
+
+## Homogeneity/Homoscedasticity:
+
+**The spread above 0 and below in both horizontal and vertical directions are relatively equal. The spread across X axis is quite even. Assumption met.**\
+```{r homog-s}
+{plot(fittedvalues, standardized)
+  abline(h = 0)
+  abline(v = 0)}
+```
+
+## Data exploration:\
+
+**We grouped each subject (participant) to calculate their average accuracy score.**\
+
+```{r}
+##we use dplyr package function to create a new data set, witch including SujNum, Condition, and Average points of the accuracy for each child.
+dat <- mydata %>% 
+  group_by(SubjNum, Condition) %>%
+  dplyr::summarize(avgAcc = mean(Accuracy.SelectedTarget.))
+head(dat)
+```
+
+## Part 3: The Analysis
+**We decided to use T-Test to test our null hypothesis.**
+
+```{r}
+ttest<-t.test(avgAcc ~ Condition, dat, var.equal = TRUE, paired = FALSE)
+ttest
+#t statistics 
+ttest$statistic
+#p-value
+ttest$p.value
+#sample size
+nrow(dat)
+
+#effect size
+cohensD(dat$avgAcc[dat$Condition == "Directional"], dat$avgAcc[dat$Condition == "Relational"])
+```
+
+## Summarize
+From the given information in the original and replicate study, the focal point was to find out whether a directional or relational language can help conjunct visual features. The conjunction was measured by "accuracy" where 1 = child successfully identified the target pattern, and 0 = failure. \
+
+Without further information, we formed our hypothesis to test this very finding.\
+
+Null hypothesis: The condition (directional/relational) has no influence on the accuracy\
+Alternative hypothesis: The condition (directional/relational) has some influence on the accuracy\
+
+We decided to use T-test to test our hypothesis.\
+
+In the data screening step, we followed the procedure to check 1) accuracy (factor variables), 2) missing data (none), 3) outliers (removed one participant who failed the practice), 4) linearity (met), 5) normality (met), 6) homogeneity (met).\
+
+Each participant was recorded with practice (trial 2 to 7) and experimental (trial 9 to 32) results. For the purpose of this test, we kept only the experimental trials.\
+
+The raw data was already in a long format, so we grouped the data by SubjNum (participant) and calculated the average accuracy score for each person. Since each participant was given only one type of language condition, the two groups are independent.\
+
+We then perform the T-test on "average accuracy" for the two different "condition" groups. We chose 0.05 as our critical value.\
+
+The p-value is 0.1321 which is bigger than our critical value .05, so we failed to reject the null that the type of language condition (directional/relational) has no influence on children's accuracy in conjuncting color and space. This conclusion has the opposite direction with both the original study and the replicate.\
+
+With a sample size of 48 subjects, our effect size is 0.4721827, which is small.\
+
+
