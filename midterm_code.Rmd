@@ -1,0 +1,332 @@
+---
+title: "Midterm Code Section"
+author: "Yueze Xu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Instructions
+
+You will need to complete the portion of the exam before starting the second portion. You will use your answers on this exam to complete the second half. Only knitted files will be graded! Make sure your complete this portion of the exam on your own. Use your notes and class examples to get started with the code. 
+
+# Abstract
+
+Eventual memory performance is predicted more accurately when a person's judgment of learning (JOL) is delayed until shortly after studying an item than when made immediately after studying the item. According to the transfer-appropriate-monitoring hypothesis, this delayed- JOL effect arises because of the contextual similarity between the cue for the JOL and the cue for the memory test. In a paired-associate learning experiment, delayed JOLs were cued by the stimulus alone or by the stimulus-response pair, and the eventual test was associative recognition of stimulus-response pairs. Recognition of stimulus-response pairs was predicted more accurately when JOLs had been cued by the stimulus alone than when they had been cued by the stimulus-response pair, even though the latter was more similar than the former to the cue for the recognition test. Implications of these results, especially the lack of support for the class of theories emphasizing transfer-appropriate monitoring, are discussed for theories of the accuracy of JOLs.
+
+# Method
+
+In these experiments, participants are given English word pairs to learn (i.e. dog-table). They are asked after each word pair: “how confident are you that in about ten minutes from now you will be able to recognize the second of the item when prompted with the first? (0 = definitely won't recognize, 20 = 20% sure, 40 ..., 60 ..., 80 ..., 100 = definitely will recognize). These ratings (JOLs) were given either right after the word pair was presented or after the entire block of word pairs were presented. These ratings were prompted with either just the cue word (i.e. dog, the first word of each pair) or both the words (stimulus-response pairing). After all word-pairs were studied, a 10-minute break was given. Participants were then measured by marking which word-pairings they recognized (0 = not studied, 20 = 20 % sure studied, 40 ..., 60 ..., 80 ..., 100 = definitely studied). You can assume the ratings are continuous.  
+
+# Dataset:
+
+- JOL group: if they rated their confidence immediately or at the end of each block for how well they would remember the word-pairs.
+- Type cue: what type of cue they were using to rate their confidence, either the word-pair or the cue word only.
+- Confidence: their average rated confidence to remember word pairs across trial blocks.
+- Recognition: their average memory for words across trial blocks.
+  
+In this section, the data will be loaded for you from the package. You will change the id = 123456 to your HU id number. This number will generate your data for you in the same time each way, so if you rerun this analysis, you will get the same numbers each time.   
+
+```{r starting}
+library(learnSTATS)
+library(mice, quietly = T)
+library(corrplot)
+midterm <- midterm_data(idnum = 285987)
+head(midterm)
+```
+
+# Data screening:
+
+## Accuracy:
+    
+- Include output and indicate how the data are not accurate.
+  **1. Variable JOL_group and type_cue don't have accurate values.**
+  **2. Continues variable has values less than 0 and more than 100.**
+- Include output to show how you fixed the accuracy errors, and describe what you did.
+ **For character variable I did factor function, for continues variable fix the range between 0 to 100.**
+
+```{r accuracy}
+summary(midterm)
+
+notypos <- midterm
+str(notypos)
+notypos$JOL_group <- factor(notypos$JOL_group,
+                      levels = c("delayed", "immediate"),
+                      labels = c("Delayed", "Immediate"))
+notypos$type_cue <- factor(notypos$type_cue,
+                      levels = c("cue only", "stimulus pairs"),
+                      labels = c("Cue only", "Stimulus pairs"))
+
+str(notypos$JOL_group)
+table(notypos$JOL_group)
+str(notypos$type_cue)
+table(notypos$type_cue)
+
+
+notypos[ , 3:22][ notypos[ , 3:22] < 0 ] <- NA
+notypos[ , 3:22][ notypos[ , 3:22] > 100 ] <- NA
+
+summary(notypos)
+
+```
+
+## Missing data:
+
+- Using the 5% rule, exclude all rows that have missing data.
+- Create separate datasets for your continuous measures and categorical measures. 
+**I did not create two new datasets for the two type of variables, I use column number [3:22] for continuous variabels, and [1:2] for catergorical variabel, which is JOL group and type_cue. **
+- Estimate the missing data for your continuous measures.
+- Combine your categorical columns back to your newly estimated continuous columns. 
+    
+```{r missing}
+percentmiss <- function(x) { sum(is.na(x))/length(x) * 100}
+#rows
+missing <- apply(notypos, 1, percentmiss)
+table(missing)
+
+replacerows <- subset(notypos, missing <= 5)
+norows <- subset(notypos, missing > 5)
+
+nrow(notypos)
+nrow(replacerows)
+nrow(norows)
+
+#columns
+apply(replacerows, 2, percentmiss)
+
+#take out categorical columns
+replacecols <- replacerows[ , c(3:22)]
+nocols <- replacerows[ , -c(3:22)]
+
+tempnomiss <- mice(replacecols)
+nomiss <- complete(tempnomiss, 1)
+
+dim(notypos)
+dim(nomiss)
+summary(nomiss)
+
+#combine columns
+allcolumns <- cbind(nocols,nomiss)
+summary(allcolumns)
+
+#combine rows
+allrows <- rbind(allcolumns, norows)
+summary(allrows)
+
+```
+
+## Outliers:
+
+- Calculate your Mahalanobis distance scores. 
+- Include a summary of your mahal scores that are greater than the cutoff. 
+  **From the result, the model include 3 outliers, I have two option of the dataset, one with 2 ouliters, and the other one is 3. (Check the number of outlier from the FALSE result)**
+
+```{r outliers}
+mahal <- mahalanobis(allrows[ , -c(1:2)],
+                     colMeans(allrows[ , -c(1:2)], na.rm = T), 
+                     cov(allrows[ , -c(1:2)], use = "pairwise.complete.obs"))
+
+cutoff <- qchisq(1 - .001, df = ncol(allrows[ , -c(1:2)]))
+##how many outliers.
+summary(mahal < cutoff)
+
+noout <- subset(allrows, mahal < cutoff)
+nrow(noout)
+```
+
+# Assumptions:
+
+## Additivity: 
+
+- Include a `corrplot()` of your continuous measures. 
+    
+```{r additivity}
+corrplot(cor(noout[ , 3:22]))
+symnum(cor(noout[ , 3:22]))
+```
+
+## Linearity: 
+
+- Include a picture that shows how you might assess multivariate linearity.
+
+```{r linearity}
+##Fake Regression
+random <- rchisq(nrow(noout), 6) # lucky number 6
+fake <- lm(random ~ ., data = noout) #drop ID variables 
+standardized <- rstudent(fake)
+fittedvalues <- scale(fake$fitted.values)
+
+{qqnorm(standardized)
+  abline(0,1)
+  abline(v = -2)
+  abline(v = 2)}
+```
+
+## Normality: 
+
+- Include a picture that shows how you might assess multivariate normality.
+
+```{r normality}
+hist(standardized, breaks = 15)
+```
+
+## Homogeneity/Homoscedasticity:
+
+- Include a picture that shows how you might assess multivariate homogeneity.
+
+```{r homog-s}
+{plot(fittedvalues, standardized)
+  abline(h = 0)
+  abline(v = 0)}
+```
+
+# Data exploration:
+
+Create and save average scores for confidence and recognition across trial blocks (two separate columns). Use the following: `apply(dataset[ , column #s for confidence or recognition], 1, mean)`. You will use these average scores for the rest of the test. 
+
+```{r avg-scores}
+avgconfi <- apply(noout[, 3:12], 1, mean)
+avgrec <- apply(noout[, 13:22], 1, mean)
+```
+
+Create histograms of the confidence and recognition average scores (you can use hist or ggplot2). These charts do not have to be pretty. 
+
+```{r histogram}
+#For confidence 
+library(ggplot2)
+confihist <- ggplot(data = noout, aes(x = avgconfi))
+confihist + 
+  geom_histogram(binwidth = 1, color = 'white') +
+  xlab('Average Score of confidence')+
+  ylab('Frequence')+
+  ggtitle("Histogram of Average Score of Confidence")+
+  theme_bw()
+
+#For recognition 
+rechist <- ggplot(data = noout, aes(x = avgrec))
+rechist + 
+  geom_histogram(binwidth = 1, color = 'white') +
+  xlab('Average Score of recongnition')+
+  ylab('Frequence')+
+  ggtitle("Histogram of Average Score of Recongnition") +
+  theme_bw()
+
+```
+
+Print out the means, standard deviations, and length for each condition (JOL-Group and Type Cue combined together) in the study for recognition only. 
+
+```{r descriptives}
+des_mean <- tapply(avgrec, list(noout$JOL_group, noout$type_cue), mean, na.rm= T)
+des_mean
+
+des_std <- tapply(avgrec, list(noout$JOL_group, noout$type_cue), sd, na.rm= T)
+des_std
+
+des_length <- tapply(avgrec, list(noout$JOL_group, noout$type_cue), length)
+des_length
+```
+
+Use MOTE to calculate the effect size for the difference between recognition scores for the following comparisons:
+
+- Immediate JOL versus Delay JOL for cue only. **The effect size is 0.03283318, and it is small**
+- Immediate JOL versus Delay JOL for stimulus pairs. **The effect size is 0.7374211, and it is small as well. **
+
+```{r MOTE}
+library(MOTE)
+#1
+effect_size1 <- d.ind.t(m1 = des_mean[1,1], m2 = des_mean[2,1],
+                        sd1 = des_std[1,1], sd2 = des_std[2,1],
+                        n1 = des_length[1,1], n2 = des_length[2,1],a = .05)
+effect_size1$d
+#2
+effect_size2 <- d.ind.t(m1 = des_mean[1,2], m2 = des_mean[2,2],
+                        sd1 = des_std[1,2], sd2 = des_std[2,2],
+                        n1 = des_length[1,2], n2 = des_length[2,2],a = .05)
+effect_size2$d
+```
+
+# Charts:
+
+On all of these questions, be sure to include a coherent label for the X and Y axes. You should change them to be "professional looking" (i.e. Proper Case, explain the variable listed, and could be printed in a journal). The following will be assessed:
+
+- Is it readable?
+- Is X-axis labeled appropriately?
+- Is Y-axis labeled appropriately?
+- Is it the right graph?
+- Do the labels look appropriate?
+- Are there error bars when appropriate?
+bar +
+Make a bar chart with two independent variables: JOL group, type cue, recognition
+**For this question specifically, I remove the na rows in variable type_cue, and create a new dataset called nona for barplot only**
+```{r two-iv-bar}
+library(ggplot2)
+
+new_noout <- cbind(noout, avgrec)
+nona <- subset(new_noout, !is.na(type_cue))
+bar <- ggplot(nona, aes(type_cue, avgrec, fill = JOL_group))
+
+bar + 
+  stat_summary(fun = mean,
+               geom = "bar",
+               position = "dodge") +
+  stat_summary(fun.data = mean_cl_normal,
+               geom = "errorbar", 
+               position = position_dodge(width = 0.90),
+               width = .2) +
+  xlab("Type Cue") +
+  ylab("Average recognition score")+
+  scale_fill_manual(name = "JOL Group", labels = c("Delayed", "Immediate"), 
+                    values = c("Pink", "Cyan")) +
+  ggtitle("Bar Plot: Type Cue(without NA) vs Average of Recognition filled with JOL Group") +
+  theme_classic()
+  
+
+```
+
+Make a repeated measures bar chart: Type of rating (Confidence, recognition), rating 
+**From this question, I use back the noout dataset, which including the na variables for type_cue.**
+
+```{r rm-bar}
+library(reshape)
+noout$avgconfi <- avgconfi
+noout$avgrec <- avgrec
+summary(noout)
+
+bar2 <- melt(noout, id.vars = c(1:2), measure.vars = c("avgconfi", "avgrec"))
+summary(bar2)
+names(bar2)[names(bar2) == 'variable'] <- 'type_of_rating'
+names(bar2)[names(bar2) == 'value'] <- 'rating'
+
+barplot2<- ggplot(bar2, aes(type_of_rating,rating, fill = JOL_group))
+barplot2 +
+  stat_summary(fun = mean,
+               geom = "bar",
+               position = "dodge") +
+  stat_summary(fun.data = mean_cl_normal,
+               geom = "errorbar", 
+               position = position_dodge(width = 0.90),
+               width = .2) +
+  xlab("Type of Rating") +
+  ylab("Rating Scores")+
+  scale_fill_manual(name = "JOL Group", labels = c("Delayed", "Immediate"), 
+                    values = c("Pink", "Cyan")) +
+  ggtitle("Bar PLot: Type of Rating vs Rating Score fill with JOL Group") +
+  theme_classic()
+  
+```
+
+Make a simple scatterplot with a line of best fit: Confidence, recognition
+
+```{r scatter-line}
+scatter <- ggplot(noout, aes(avgconfi, avgrec))
+scatter +
+  geom_point() +
+  geom_smooth(method = lm) +
+  xlab("Average of Condifence Score") +
+  ylab("Average of Recognition Score") +
+  ggtitle("Scatter Plot: Confidence vs Recognition")
+
+```

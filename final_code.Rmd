@@ -1,0 +1,150 @@
+---
+title: "Final Code Section"
+author: "Yueze Xu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+```
+
+# Instructions
+
+You will need to complete the portion of the exam before starting the second portion. You will use your answers on this exam to complete the second half. Only knitted files will be graded! Make sure your complete this portion of the exam on your own. Use your notes and class examples to get started with the code. 
+
+# Abstract
+
+Much attention has been devoted to how technological advancements have created a brave new workplace, revolutionizing the ways in which work is being carried out, and how employees can improve their productivity and efficiency. However, the advent of technology has also opened up new avenues and opportunities for individuals to misbehave. This study focused on cyberloafing—the act of employees using their companies' internet access for personal purposes during work hours. Cyberloafing, thus, represents a form of production deviance. Using the theoretical frameworks offered by social exchange, organizational justice and neutralization, we examined the often-neglected dark side of the internet and the role that neutralization techniques play in facilitating this misbehavior at the workplace. Specifically, we developed a model, which suggested that when individuals perceived their organizations to be distributively, procedurally and interactionally unjust, they were likely to invoke the metaphor of the ledger as a neutralization technique to legitimize their subsequent engagement in the act of cyberloafing.
+
+*Citation:* Lim, V. K. (2002). The IT way of loafing on the job: cyberloafing, neutralizing and organizational justice. Journal of Organizational Behavior, 23, 675-694. doi: 10.1002/job.161
+
+# Method
+
+Participants were given interviews to determine their perception of the company. After their interview the amount of cyberloafing (minutes per day) was measured using different types of computer stations. All employees were measured at each type of station. 
+
+# Dataset:
+
+-	Gender of the worker: male or female
+-	Perception of company: unjust, neutral, fair
+-	Cyberloafing: a measure of the amount of cyberloafing for several months
+-	Workstation distance: distance of workstation from boss
+-   Length of time: time spent working at current job
+
+In this section, the data will be loaded for you from the package. You will change the id = 123456 to your HU id number. This number will generate your data for you in the same time each way, so if you rerun this analysis, you will get the same numbers each time.   
+
+```{r starting}
+library(learnSTATS)
+final <- final_data(idnum = 285987)
+head(final)
+```
+
+# One-way ANOVA
+
+- Are there differences in cyberloafing based on the perception of the company? Use a one-way ANOVA to determine if there are group differences. 
+- Run the ANOVA using the `ez` library. \
+**I did assumption test first, Levene's test shows significant, p-value is smaller than .05**\
+**The One-Way ANOVA test result shows p-value is smaller than .05, which reject the null hypothesis, which there is a significant difference between cyberloafing and perception.**
+```{r anova}
+library(ez, quietly = T)
+#I did factor function on the variable 'gender' and 'perception'
+str(final)
+f <- c('gender','perception')
+final[f] <-lapply(final[f], factor)
+summary(final)
+#Run the assumption test
+#create participant number for ezANOVA
+final$partno <- 1:nrow(final)
+ezANOVA(data = final,
+        dv = cyberloafing,
+        between = perception,
+        wid = partno,
+        type = 3, 
+        detailed = T)
+##running the one-way ANOVA
+oneway.test(cyberloafing ~ perception, data = final)
+```
+
+# Post Hoc
+
+- Run a post hoc test and correction on company perception.\
+**First, I run the the post hoc without correction and then compare the result with Bonferroni correction test.\ The correction result shows no ajust P value and the P value is significant. **
+```{r posthoc}
+##post hoc tests - p.value adjustment "none"
+pairwise.t.test(final$cyberloafing,
+                final$perception,
+                p.adjust.method = "none", 
+                paired = F, 
+                var.equal = T)
+## post hoc tests - p.value adjustment "bonferroni"
+pairwise.t.test(final$cyberloafing,
+                final$perception,
+                p.adjust.method = "bonferroni", 
+                paired = F, 
+                var.equal = T)
+
+
+```
+
+# Correlations 
+
+- Include a correlation table of all the continuous variables with the `Hmisc` library.\
+**From the correlation table, the length of time has the strongest correlation with cyverloafing**
+```{r correl1}
+library(Hmisc, quietly = T)
+##Only select the continuous variable from the raw data set. 
+rcorr(as.matrix(na.omit(final[,3:5])), type = 'pearson')
+
+```
+
+- Calculate the difference in correlations for 1) cyberloafing and distance and 2) cyberloafing and length of time. \
+**The result shows cyberloafing and distance has positively relationship, and cyverlofing has postive relationship with the length of time as well.So there is not a significant difference between two groups, only the correlation between cyberloafing and length of time is larger than the correlation between cyberloafing and distance. **
+```{r corrdiff}
+library(cocor, quietly = T)
+cocor(~cyberloafing + distance|cyberloafing + length, data= final)
+```
+
+# Hierarchical Regression: 
+
+- Use a hierarchical regression predicting cyberloafing with the following steps:
+    - Step 1: Gender
+    - Step 2: Perception of Company
+    - Step 3: Length of time, workstation distance 
+- Include the `summary()` at each step. Include an `anova()` on all three models to be able to examine the changes in each step. \
+**For step 1, it is not significant. And Step 2 and Step 3 shows significantly changes of R-squared. Also, step 2 added the most variance. \ Also, in step 1, gender male is not significant, perceptionneutral is not significant in step 3. ** 
+```{r regression}
+step1 <- lm(cyberloafing ~ gender, data = final)
+step2 <- lm(cyberloafing ~ gender + perception, data = final)
+step3 <- lm(cyberloafing ~ gender + perception + length + distance, data = final)
+
+summary(step1)
+summary(step2)
+summary(step3)
+anova(step1, step2, step3)
+```
+    
+# Mediation or Moderation
+
+- Using cyberloaf as the dependent variable, test either:
+    - Mediation using distance as X and length of time as M - examining if length of time working for the company mediates the relationship between workstation distance and cyberloafing. \
+    **The confidence interval including 0, and the p-value is NOT less than .05. ** 
+    **There is NO MEDIATION.**
+    - Moderation using distance as X and length of time as M - examinin1g if length of time interacts with the workstation distance to predict cyberloafing. \
+    **There is no evidence shows MODERATION, since the p value for interation is smaller than .05**
+    - Just one of these!**For knowledge practice, I did both of them, please don't deduct points because of this.**
+    - You can use the special package for this analysis, but be sure to include all portions of the analysis (mediation: models, Sobel, bootstrapping; moderation: models + simple slopes)
+
+```{r medmod}
+library(MeMoBootR, quietly = T)
+#Mediation
+output <- mediation1(y ='cyberloafing', x='distance', m='length', df = final)
+output$z.score;output$p.value
+output$boot.ci
+#Moderation
+output1 <- moderation1(y ='cyberloafing', x='distance', m='length', df = final)
+output1$graphslopes
+summary(output1$model1)
+
+```
+
